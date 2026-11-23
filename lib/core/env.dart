@@ -16,6 +16,8 @@ class Env {
   static const _edge = String.fromEnvironment('CARD_EDGE_MM', defaultValue: '1');
   static const _outDpi = String.fromEnvironment('CARD_OUTPUT_DPI', defaultValue: '300');
   static const _detect = String.fromEnvironment('DETECT_THRESHOLD', defaultValue: '14');
+  static const _scanW = String.fromEnvironment('CARD_SCAN_W_MM', defaultValue: '100');
+  static const _scanH = String.fromEnvironment('CARD_SCAN_H_MM', defaultValue: '70');
   static const _prevPx = String.fromEnvironment('PREVIEW_LONG_SIDE_PX', defaultValue: '1800');
   static const _prevMin = String.fromEnvironment('PREVIEW_MIN_PX_PER_MM', defaultValue: '3');
   static const _prevMax = String.fromEnvironment('PREVIEW_MAX_PX_PER_MM', defaultValue: '14');
@@ -48,6 +50,10 @@ class Env {
   static final double cardEdgeMm = _d(_edge, 1);
   static final int cardOutputDpi = _i(_outDpi, 300);
   static final int detectThreshold = _i(_detect, 14);
+
+  /// ناحیه‌ای از شیشه اسکنر (از گوشه بالا‌چپ) که در حالت کارت اسکن می‌شود.
+  static final double cardScanWidthMm = _d(_scanW, 100);
+  static final double cardScanHeightMm = _d(_scanH, 70);
 
   // پیش‌نمایش
   static final double previewLongSidePx = _d(_prevPx, 1800);

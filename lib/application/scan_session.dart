@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/env.dart';
 import '../domain/scan_profile.dart';
 import 'page_edits.dart';
 import 'settings.dart';
@@ -15,30 +16,29 @@ enum ScanArea { full, a3, a4, a5, a6, letter, legal, custom }
 
 extension ScanAreaX on ScanArea {
   String get labelFa => switch (this) {
-        ScanArea.full => 'کل سطح اسکنر',
-        ScanArea.a3 => 'A3',
-        ScanArea.a4 => 'A4',
-        ScanArea.a5 => 'A5',
-        ScanArea.a6 => 'A6',
-        ScanArea.letter => 'Letter',
-        ScanArea.legal => 'Legal',
-        ScanArea.custom => 'اندازه سفارشی',
-      };
+    ScanArea.full => 'کل سطح اسکنر',
+    ScanArea.a3 => 'A3',
+    ScanArea.a4 => 'A4',
+    ScanArea.a5 => 'A5',
+    ScanArea.a6 => 'A6',
+    ScanArea.letter => 'Letter',
+    ScanArea.legal => 'Legal',
+    ScanArea.custom => 'اندازه سفارشی',
+  };
   ({double w, double h})? get mm => switch (this) {
-        ScanArea.a3 => (w: 297, h: 420),
-        ScanArea.a4 => (w: 210, h: 297),
-        ScanArea.a5 => (w: 148, h: 210),
-        ScanArea.a6 => (w: 105, h: 148),
-        ScanArea.letter => (w: 215.9, h: 279.4),
-        ScanArea.legal => (w: 215.9, h: 355.6),
-        _ => null,
-      };
+    ScanArea.a3 => (w: 297, h: 420),
+    ScanArea.a4 => (w: 210, h: 297),
+    ScanArea.a5 => (w: 148, h: 210),
+    ScanArea.a6 => (w: 105, h: 148),
+    ScanArea.letter => (w: 215.9, h: 279.4),
+    ScanArea.legal => (w: 215.9, h: 355.6),
+    _ => null,
+  };
 }
 
 /// نشست اسکن یک حالت (کارت / چندصفحه‌ای / استاندارد): تنظیمات + صفحات اسکن‌شده.
 class ScanSession extends ChangeNotifier {
-  ScanSession(this.profile, this.backend, [this.settings])
-      : dpi = settings?.lastDpi ?? settings?.defaultDpi ?? profile.defaultDpi {
+  ScanSession(this.profile, this.backend, [this.settings]) : dpi = settings?.lastDpi ?? settings?.defaultDpi ?? profile.defaultDpi {
     final st = settings;
     if (st != null) {
       color = st.lastColor == 'gray' ? ColorMode.gray : ColorMode.color;
@@ -52,6 +52,7 @@ class ScanSession extends ChangeNotifier {
   final ScannerBackend backend;
 
   final List<String> pages = [];
+
   /// چرخش هر صفحه به‌صورت ربع دور (۰ تا ۳)؛ غیرمخرب، هنگام خروجی اعمال می‌شود.
   final List<int> rotations = [];
   final List<int> dpis = []; // رزولوشن هر صفحه هنگام اسکن
@@ -71,9 +72,12 @@ class ScanSession extends ChangeNotifier {
 
   Directory? _dir;
 
-  /// ناحیه اسکن به میلی‌متر؛ null = کل سطح (کارت همیشه کل سطح و بعد برش).
+  /// ناحیه اسکن به میلی‌متر؛ null = کل سطح. کارت: ناحیه کوچک از گوشه بالا‌چپ (CARD_SCAN_W_MM / CARD_SCAN_H_MM).
   ({double x, double y, double w, double h})? _areaMm() {
-    if (profile.mode == ScanMode.idCard || area == ScanArea.full) return null;
+    if (profile.mode == ScanMode.idCard) {
+      return (x: 0.0, y: 0.0, w: Env.cardScanWidthMm, h: Env.cardScanHeightMm);
+    }
+    if (area == ScanArea.full) return null;
     final b = area == ScanArea.custom ? (w: customW, h: customH) : area.mm!;
     return (x: 0.0, y: 0.0, w: b.w, h: b.h);
   }
@@ -160,9 +164,7 @@ class ScanSession extends ChangeNotifier {
         }
       }
     }
-    phase = (!failed && !cancelled && batch.isNotEmpty && profile.mode == ScanMode.multiPage)
-        ? SessionPhase.askNext
-        : SessionPhase.idle;
+    phase = (!failed && !cancelled && batch.isNotEmpty && profile.mode == ScanMode.multiPage) ? SessionPhase.askNext : SessionPhase.idle;
     notifyListeners();
   }
 
@@ -181,6 +183,7 @@ class ScanSession extends ChangeNotifier {
       l[i] = l[j];
       l[j] = t;
     }
+
     swap(pages);
     swap(rotations);
     swap(dpis);
