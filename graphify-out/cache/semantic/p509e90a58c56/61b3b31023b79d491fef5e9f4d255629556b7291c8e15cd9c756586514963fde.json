@@ -1,0 +1,1 @@
+{"nodes": [{"id": "windows_flutter_cmakelists", "label": "Flutter Managed CMake", "file_type": "code", "source_file": "windows/flutter/CMakeLists.txt", "rationale": "Controls Flutter-level build steps, including library and wrapper compilation.", "_origin": "semantic"}], "edges": [], "hyperedges": []}
