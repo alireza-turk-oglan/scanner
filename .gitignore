@@ -47,7 +47,7 @@ app.*.map.json
 # Graphify cache and internal files
 # Graphify: keep only the 3 useful outputs
 graphify-out/*
-
+.graphifyignore
 # Keep useful project graph files
 !graphify-out/GRAPH_REPORT.md
 !graphify-out/graph.html
