@@ -1,9 +1,7 @@
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-
 import 'package:image/image.dart' as img;
-
 import '../domain/export_format.dart';
 
 class Raster {

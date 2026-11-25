@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-
 import '../core/env.dart';
 import 'export_format.dart';
 import 'layout_engine.dart';
@@ -7,14 +6,15 @@ import 'layout_engine.dart';
 enum OutputTarget { separate, combined, a4 }
 
 class CardLayoutSpec {
-  OutputTarget? target = OutputTarget.a4; // پیش‌فرض: چیدمان روی A4
+  OutputTarget? target = OutputTarget.separate; // پیش‌فرض: ذخیره جداگانه
   int rows = Env.cardRows, cols = Env.cardCols; // تعداد سطر و ستون
   bool a4Landscape = false;
   int anchor = 4; // موقعیت روی A4: ۰..۸ ردیف‌به‌ردیف (۰ بالا‌چپ، ۴ وسط، ۸ پایین‌راست)
   bool keepAspect = true;
   bool swapOrder = false;
   bool autoCrop = true;
-  double cardW = Env.cardWidthMm, cardH = Env.cardHeightMm; // ID-1؛ قابل تغییر
+  // اندازه جایگاه فقط وقتی استفاده می‌شود که اندازه واقعی تصویر برشی داده نشده باشد (boxMm در planLayout)
+  double cardW = Env.cardWidthMm, cardH = Env.cardHeightMm;
   double gap = Env.cardGapMm;
   double mTop = 0, mBottom = 0, mLeft = 0, mRight = 0;
   double edgeMm = Env.cardEdgeMm; // مثبت = برش بزرگ‌تر، منفی = کوچک‌تر
@@ -50,18 +50,16 @@ class ComposedPage {
 }
 
 /// برنامه‌ریزی چیدمان (میلی‌متر). یک ComposedPage به‌ازای هر فایل/صفحه خروجی.
-List<ComposedPage> planLayout(CardLayoutSpec s, int count, {required bool landscapeCards}) {
-  final box = landscapeCards ? PageSpec(s.cardW, s.cardH) : PageSpec(s.cardH, s.cardW);
+/// [boxMm] اندازه واقعی (جهت‌دار) مدرک برش‌خورده است؛ اگر داده شود جایگاه هر مدرک همان اندازه می‌شود.
+List<ComposedPage> planLayout(CardLayoutSpec s, int count, {required bool landscapeCards, ({double w, double h})? boxMm}) {
+  final box = boxMm != null ? PageSpec(boxMm.w, boxMm.h) : (landscapeCards ? PageSpec(s.cardW, s.cardH) : PageSpec(s.cardH, s.cardW));
   final margins = Margins(top: s.mTop, bottom: s.mBottom, left: s.mLeft, right: s.mRight);
 
   switch (s.target ?? OutputTarget.separate) {
     case OutputTarget.separate:
       return [
         for (var i = 0; i < count; i++)
-          ComposedPage(
-            PageSpec(box.widthMm + s.mLeft + s.mRight, box.heightMm + s.mTop + s.mBottom),
-            [Placement(i, s.mLeft, s.mTop, box.widthMm, box.heightMm)],
-          )
+          ComposedPage(PageSpec(box.widthMm + s.mLeft + s.mRight, box.heightMm + s.mTop + s.mBottom), [Placement(i, s.mLeft, s.mTop, box.widthMm, box.heightMm)]),
       ];
     case OutputTarget.combined:
       final cols = math.max(1, math.min(s.cols, count));
@@ -69,12 +67,7 @@ List<ComposedPage> planLayout(CardLayoutSpec s, int count, {required bool landsc
       final cw = box.widthMm * cols + s.gap * (cols - 1);
       final ch = box.heightMm * rows + s.gap * (rows - 1);
       final page = PageSpec(cw + s.mLeft + s.mRight, ch + s.mTop + s.mBottom);
-      return [
-        ComposedPage(
-          page,
-          LayoutEngine.grid(page: page, itemMm: box, count: count, rows: rows, cols: cols, gapMm: s.gap, margins: margins, fit: false),
-        )
-      ];
+      return [ComposedPage(page, LayoutEngine.grid(page: page, itemMm: box, count: count, rows: rows, cols: cols, gapMm: s.gap, margins: margins, fit: false))];
     case OutputTarget.a4:
       final page = s.a4Landscape ? PageSpec.a4.landscape : PageSpec.a4;
       final cols = math.max(1, s.cols), rows = math.max(1, s.rows);
@@ -82,7 +75,18 @@ List<ComposedPage> planLayout(CardLayoutSpec s, int count, {required bool landsc
       final out = <ComposedPage>[];
       for (var start = 0; start < count; start += cap) {
         final n = math.min(cap, count - start);
-        final g = LayoutEngine.grid(page: page, itemMm: box, count: n, rows: rows, cols: cols, gapMm: s.gap, margins: margins, fit: true, ax: (s.anchor % 3) / 2.0, ay: (s.anchor ~/ 3) / 2.0);
+        final g = LayoutEngine.grid(
+          page: page,
+          itemMm: box,
+          count: n,
+          rows: rows,
+          cols: cols,
+          gapMm: s.gap,
+          margins: margins,
+          fit: true,
+          ax: (s.anchor % 3) / 2.0,
+          ay: (s.anchor ~/ 3) / 2.0,
+        );
         out.add(ComposedPage(page, [for (final p in g) Placement(start + p.index, p.xMm, p.yMm, p.widthMm, p.heightMm)]));
       }
       return out;

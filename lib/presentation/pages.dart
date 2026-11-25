@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../application/hardware_controller.dart';
 import 'format.dart';
 

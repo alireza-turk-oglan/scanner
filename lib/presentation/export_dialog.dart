@@ -1,7 +1,5 @@
 import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-
 import '../application/card_pipeline.dart';
 import '../application/export_service.dart';
 import '../application/page_edits.dart';

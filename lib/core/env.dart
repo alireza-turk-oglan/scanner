@@ -1,7 +1,4 @@
-/// مقادیر قابل تنظیم زمان کامپایل. مقدار هر کلید از فایل app.env (یا --dart-define) خوانده می‌شود:
-///   flutter run -d windows --dart-define-from-file=app.env
-///   flutter build windows --release --dart-define-from-file=app.env
-/// اگر کلیدی تعریف نشود، مقدار پیش‌فرض همین‌جا استفاده می‌شود.
+
 class Env {
   const Env._();
 

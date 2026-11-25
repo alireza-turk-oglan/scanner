@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-
 import '../application/page_edits.dart';
 import '../core/env.dart';
 import '../core/jalali.dart';

@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
-
 import '../core/env.dart';
 
 /// مستطیل جهت‌دار کارت در مختصات تصویر کوچک‌شده. theta = زاویه محور u (نزدیک‌ترین به افق).
@@ -21,10 +20,14 @@ DetectedCard? detectCard(Uint8List rgba, int W, int H, {int? threshold}) {
   // پس‌زمینه = میانه پیکسل‌های لبه تصویر
   final border = <int>[];
   for (var x = 0; x < W; x++) {
-    border..add(lum[x])..add(lum[(H - 1) * W + x]);
+    border
+      ..add(lum[x])
+      ..add(lum[(H - 1) * W + x]);
   }
   for (var y = 0; y < H; y++) {
-    border..add(lum[y * W])..add(lum[y * W + W - 1]);
+    border
+      ..add(lum[y * W])
+      ..add(lum[y * W + W - 1]);
   }
   border.sort();
   final bg = border[border.length ~/ 2];
@@ -69,21 +72,43 @@ DetectedCard? detectCard(Uint8List rgba, int W, int H, {int? threshold}) {
         final p = stack[--sp];
         area++;
         final x = p % W, y = p ~/ W;
-        if (x > 0 && dil[p - 1] == 1 && labels[p - 1] == 0) { labels[p - 1] = cur; stack[sp++] = p - 1; }
-        if (x < W - 1 && dil[p + 1] == 1 && labels[p + 1] == 0) { labels[p + 1] = cur; stack[sp++] = p + 1; }
-        if (y > 0 && dil[p - W] == 1 && labels[p - W] == 0) { labels[p - W] = cur; stack[sp++] = p - W; }
-        if (y < H - 1 && dil[p + W] == 1 && labels[p + W] == 0) { labels[p + W] = cur; stack[sp++] = p + W; }
+        if (x > 0 && dil[p - 1] == 1 && labels[p - 1] == 0) {
+          labels[p - 1] = cur;
+          stack[sp++] = p - 1;
+        }
+        if (x < W - 1 && dil[p + 1] == 1 && labels[p + 1] == 0) {
+          labels[p + 1] = cur;
+          stack[sp++] = p + 1;
+        }
+        if (y > 0 && dil[p - W] == 1 && labels[p - W] == 0) {
+          labels[p - W] = cur;
+          stack[sp++] = p - W;
+        }
+        if (y < H - 1 && dil[p + W] == 1 && labels[p + W] == 0) {
+          labels[p + W] = cur;
+          stack[sp++] = p + W;
+        }
       }
-      if (area > bestArea) { best = cur; bestArea = area; }
+      if (area > bestArea) {
+        best = cur;
+        bestArea = area;
+      }
     }
   }
-  if (bestArea > 0.95 * n || bestArea < 0.02 * n) return null;
+  if (bestArea < 0.02 * n) return null;
+  // مدرک تقریباً کل تصویر را پر کرده (مثلاً شناسنامه با ناحیه اسکن هم‌اندازه): همان تصویر کامل نتیجه برش است.
+  // قبلاً این حالت «تشخیص ناموفق» حساب می‌شد و برش خودکار اعمال نمی‌شد.
+  if (bestArea > 0.95 * n) return DetectedCard(W / 2, H / 2, W.toDouble(), H.toDouble(), 0);
 
   var sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0;
   for (var i = 0; i < n; i++) {
     if (labels[i] == best) {
       final x = i % W + 0.5, y = i ~/ W + 0.5;
-      sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y;
+      sx += x;
+      sy += y;
+      sxx += x * x;
+      syy += y * y;
+      sxy += x * y;
     }
   }
   final a = bestArea.toDouble();
@@ -107,7 +132,10 @@ DetectedCard? detectCard(Uint8List rgba, int W, int H, {int? threshold}) {
   }
   // جبران گسترش مربعی (در راستای چرخیده بیشتر از r است)
   final shrink = r * (c.abs() + s.abs());
-  uMin += shrink; uMax -= shrink; vMin += shrink; vMax -= shrink;
+  uMin += shrink;
+  uMax -= shrink;
+  vMin += shrink;
+  vMax -= shrink;
   if (uMax - uMin < 10 || vMax - vMin < 10) return null;
   final uc = (uMin + uMax) / 2, vc = (vMin + vMax) / 2;
   return DetectedCard(mx + uc * c - vc * s, my + uc * s + vc * c, uMax - uMin, vMax - vMin, th);

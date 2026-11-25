@@ -1,5 +1,4 @@
 import 'package:flutter/services.dart';
-
 import '../domain/printer_info.dart';
 import '../domain/scanner_backend.dart';
 

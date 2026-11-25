@@ -1,7 +1,5 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-
 import '../application/hardware_controller.dart';
 import '../application/scan_session.dart';
 import '../application/services.dart';

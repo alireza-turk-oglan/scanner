@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-
 import 'application/hardware_controller.dart';
 import 'application/library.dart';
 import 'application/services.dart';

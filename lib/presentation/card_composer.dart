@@ -18,7 +18,8 @@ import '../domain/export_format.dart';
 import 'page_editor.dart';
 import 'widgets.dart';
 
-/// چیدمان و خروجی کارت: برش خودکار، اندازه، حاشیه، ترکیب روی/پشت، پیش‌نمایش زنده، ذخیره PNG.
+/// چیدمان و خروجی مدارک: برش خودکار، حاشیه، ترکیب روی/پشت، پیش‌نمایش زنده، ذخیره.
+/// اندازه هر مدرک از روی خود تصویر برش‌خورده (پیکسل ÷ DPI) تعیین می‌شود.
 class CardComposerView extends StatefulWidget {
   const CardComposerView({super.key, required this.session, required this.services});
   final ScanSession session;
@@ -33,12 +34,11 @@ class _CardComposerViewState extends State<CardComposerView> {
   CardLayoutSpec _initSpec() {
     final st = widget.services.settings;
     return CardLayoutSpec()
-      ..cardW = st.cardW
-      ..cardH = st.cardH
       ..dpi = const [200, 300, 600].contains(st.defaultDpi) ? st.defaultDpi : Env.cardOutputDpi
       ..format = ExportFormatX.fromName(st.defaultFormat)
       ..applyDefaultMargins(a4: st.defaultMargin);
   }
+
   final _cache = <String, CardImage>{};
   List<ui.Image> _previews = [];
   String? _outDir, _msg, _warn;
@@ -102,7 +102,11 @@ class _CardComposerViewState extends State<CardComposerView> {
           final cropped = await cropCard(full, s.dpis[i], auto: true, edgeMm: spec.edgeMm);
           if (!identical(cropped.image, full)) full.dispose();
           if (e.hasColor || e.deskewDeg != 0) {
-            final ce = e.copy()..left = 0..top = 0..right = 1..bottom = 1;
+            final ce = e.copy()
+              ..left = 0
+              ..top = 0
+              ..right = 1
+              ..bottom = 1;
             final colored = await applyEdit(cropped.image, ce, 0);
             cropped.image.dispose();
             c = CardImage(colored, s.dpis[i], cropped.cropped);
@@ -122,11 +126,25 @@ class _CardComposerViewState extends State<CardComposerView> {
     return out;
   }
 
+  /// اندازه واقعی جایگاه مدرک (میلی‌متر، بعد از چرخش): بزرگ‌ترین عرض و ارتفاع بین صفحات.
+  ({double w, double h}) _boxMm(List<CardImage> cards, List<int> turns) {
+    var w = 1.0, h = 1.0;
+    for (var i = 0; i < cards.length; i++) {
+      final c = cards[i];
+      final odd = turns[i].isOdd;
+      final pw = (odd ? c.image.height : c.image.width) / c.dpi * 25.4;
+      final ph = (odd ? c.image.width : c.image.height) / c.dpi * 25.4;
+      w = math.max(w, pw);
+      h = math.max(h, ph);
+    }
+    return (w: w, h: h);
+  }
+
   ({List<CardImage> cards, List<int> turns, List<int> order, List<ComposedPage> plan}) _prepared(List<CardImage> cards) {
     final order = (spec.swapOrder && cards.length == 2) ? [1, 0] : [for (var i = 0; i < cards.length; i++) i];
     final ordered = [for (final i in order) cards[i]];
     final turns = [for (final i in order) cards[i].turned ? 0 : s.rotations[i]];
-    final plan = planLayout(spec, ordered.length, landscapeCards: isLandscape(ordered[0], turns[0]));
+    final plan = planLayout(spec, ordered.length, landscapeCards: isLandscape(ordered[0], turns[0]), boxMm: _boxMm(ordered, turns));
     return (cards: ordered, turns: turns, order: order, plan: plan);
   }
 
@@ -148,9 +166,7 @@ class _CardComposerViewState extends State<CardComposerView> {
       final imgs = <ui.Image>[];
       for (final page in p.plan) {
         // رزولوشن پیش‌نمایش متناسب با اندازه صفحه (ضلع بزرگ ≈ ۱۸۰۰ پیکسل) تا تصویر شفاف باشد
-        final ppm = (Env.previewLongSidePx / math.max(page.page.widthMm, page.page.heightMm))
-            .clamp(Env.previewMinPxPerMm, Env.previewMaxPxPerMm)
-            .toDouble();
+        final ppm = (Env.previewLongSidePx / math.max(page.page.widthMm, page.page.heightMm)).clamp(Env.previewMinPxPerMm, Env.previewMaxPxPerMm).toDouble();
         imgs.add(await renderPage(page, p.cards, p.turns, ppm, spec.keepAspect));
       }
       if (gen != _gen || !mounted) {
@@ -165,7 +181,7 @@ class _CardComposerViewState extends State<CardComposerView> {
         _busy = false;
         _msg = null;
         _warn = (spec.autoCrop && cards.any((c) => !c.cropped))
-            ? 'تشخیص خودکار لبه کارت ممکن نشد و کل صفحه استفاده شد. کارت را با فاصله از لبه شیشه و روی پس‌زمینه سفید بگذارید.'
+            ? 'تشخیص خودکار لبه مدرک ممکن نشد و کل صفحه استفاده شد. مدرک را با فاصله از لبه‌ها و روی پس‌زمینه یکدست بگذارید، یا اندازه ناحیه اسکن را در تنظیمات کمی بزرگ‌تر کنید.'
             : null;
       });
     } catch (_) {
@@ -192,7 +208,7 @@ class _CardComposerViewState extends State<CardComposerView> {
 
   String _pageSuffix(int idx) => idx == 0 ? '_front' : (idx == 1 ? '_back' : '_page${idx + 1}');
 
-  String _pageName(int i) => i == 0 ? 'روی کارت' : (i == 1 ? 'پشت کارت' : toPersianDigits('صفحه ${i + 1}'));
+  String _pageName(int i) => i == 0 ? s.idDoc.firstPageFa : (i == 1 ? s.idDoc.secondPageFa : toPersianDigits('صفحه ${i + 1}'));
 
   Future<void> _save() async {
     if (spec.target == null || s.pages.isEmpty) return;
@@ -208,7 +224,7 @@ class _CardComposerViewState extends State<CardComposerView> {
     try {
       final dir = await svc.resolveSaveDir(base);
       final p = _prepared(await _loadCards());
-      final name = buildFileName(svc.settings.namePattern, 'IDCard', DateTime.now());
+      final name = buildFileName(svc.settings.namePattern, s.idDoc.fileTag, DateTime.now());
       final o = SaveOptions(format: spec.format, quality: svc.settings.jpegQuality);
       final saved = <String>[];
       if (spec.target == OutputTarget.separate) {
@@ -232,13 +248,7 @@ class _CardComposerViewState extends State<CardComposerView> {
           images.add(img);
           pages.add(OutPage(img, spec.dpi.toDouble(), pageWmm: page.page.widthMm, pageHmm: page.page.heightMm));
         }
-        final r = await saveDocument(
-          dir: dir,
-          baseName: name + (spec.target == OutputTarget.combined ? '_combined' : '_A4'),
-          o: o,
-          pages: pages,
-          library: svc.library,
-        );
+        final r = await saveDocument(dir: dir, baseName: name + (spec.target == OutputTarget.combined ? '_combined' : '_A4'), o: o, pages: pages, library: svc.library);
         saved.addAll(r.map((e) => e.path));
       }
       if (mounted) setState(() => _msg = 'ذخیره شد:\n${saved.join('\n')}');
@@ -260,84 +270,102 @@ class _CardComposerViewState extends State<CardComposerView> {
 
   // ───── رابط ─────
   @override
-  Widget build(BuildContext context) => Row(children: [
-        Expanded(child: _preview(context)),
-        const VerticalDivider(width: 1),
-        SizedBox(width: 320, child: _options(context)),
-      ]);
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(child: _preview(context)),
+      const VerticalDivider(width: 1),
+      SizedBox(width: 320, child: _options(context)),
+    ],
+  );
 
   Widget _preview(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     Widget center;
     if (s.pages.isEmpty) {
-      center = const Text('ابتدا حداقل یک طرف کارت را در بخش «اسکن» اسکن کنید.');
+      center = const Text('ابتدا حداقل یک طرف مدرک را در بخش «اسکن» اسکن کنید.');
     } else if (spec.target == null) {
       center = const Text('نوع خروجی را از پنل کناری انتخاب کنید.');
     } else if (_previews.isEmpty) {
       center = _busy ? const CircularProgressIndicator() : Text(_msg ?? '');
     } else {
-      center = _PreviewViewport(
-        previews: _previews,
-        zoom: _zoom,
-        shadow: scheme.shadow.withValues(alpha: 0.35),
-        onZoom: (z) => setState(() => _zoom = z),
-      );
+      center = _PreviewViewport(previews: _previews, zoom: _zoom, shadow: scheme.shadow.withValues(alpha: 0.35), onZoom: (z) => setState(() => _zoom = z));
     }
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('چیدمان و خروجی کارت', style: Theme.of(context).textTheme.headlineSmall),
-        if (_warn != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_warn!, style: TextStyle(color: scheme.error))),
-        if (_msg != null && _previews.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg!)),
-        const SizedBox(height: 4),
-        if (_previews.isNotEmpty)
-          Row(children: [
-            IconButton(tooltip: 'کوچک‌نمایی', onPressed: () => setState(() => _zoom = (_zoom - 0.25).clamp(1.0, 8.0).toDouble()), icon: const Icon(Icons.zoom_out)),
-            SizedBox(width: 180, child: LtrSlider(value: _zoom, min: 1, max: 8, divisions: 28, onChanged: (v) => setState(() => _zoom = v))),
-            IconButton(tooltip: 'بزرگ‌نمایی', onPressed: () => setState(() => _zoom = (_zoom + 0.25).clamp(1.0, 8.0).toDouble()), icon: const Icon(Icons.zoom_in)),
-            Text(toPersianDigits('${(_zoom * 100).round()}٪')),
-            TextButton(onPressed: () => setState(() => _zoom = 1), child: const Text('اندازه مناسب')),
-          ]),
-        const SizedBox(height: 4),
-        Expanded(
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: Stack(children: [
-              Center(child: center),
-              if (_busy && _previews.isNotEmpty) const Positioned(top: 8, left: 8, child: CircularProgressIndicator()),
-            ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('چیدمان و خروجی ${s.idDoc.labelFa}', style: Theme.of(context).textTheme.headlineSmall),
+          if (_warn != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_warn!, style: TextStyle(color: scheme.error)),
+            ),
+          if (_msg != null && _previews.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg!)),
+          const SizedBox(height: 4),
+          if (_previews.isNotEmpty)
+            Row(
+              children: [
+                IconButton(tooltip: 'کوچک‌نمایی', onPressed: () => setState(() => _zoom = (_zoom - 0.25).clamp(1.0, 8.0).toDouble()), icon: const Icon(Icons.zoom_out)),
+                SizedBox(
+                  width: 180,
+                  child: LtrSlider(value: _zoom, min: 1, max: 8, divisions: 28, onChanged: (v) => setState(() => _zoom = v)),
+                ),
+                IconButton(tooltip: 'بزرگ‌نمایی', onPressed: () => setState(() => _zoom = (_zoom + 0.25).clamp(1.0, 8.0).toDouble()), icon: const Icon(Icons.zoom_in)),
+                Text(toPersianDigits('${(_zoom * 100).round()}٪')),
+                TextButton(onPressed: () => setState(() => _zoom = 1), child: const Text('اندازه مناسب')),
+              ],
+            ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                children: [
+                  Center(child: center),
+                  if (_busy && _previews.isNotEmpty) const Positioned(top: 8, left: 8, child: CircularProgressIndicator()),
+                ],
+              ),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 
-  Widget _chip(String label, bool selected, VoidCallback onTap) =>
-      ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap());
+  Widget _chip(String label, bool selected, VoidCallback onTap) => ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap());
 
   Widget _title(String t) => Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 6),
-      child: Text(t, style: Theme.of(context).textTheme.titleSmall));
+    padding: const EdgeInsets.only(top: 14, bottom: 6),
+    child: Text(t, style: Theme.of(context).textTheme.titleSmall),
+  );
 
   Widget _numF(String label, double v, void Function(double) set, {double min = 0, double max = 1000}) =>
       _NumField(label: label, value: v, min: min, max: max, onChanged: (x) => _change(() => set(x)));
 
   /// فیلدها دو‌تا‌دو؛ اگر تعداد فرد باشد آخری وسط می‌آید.
-  Widget _grid2(List<Widget> f) => Column(children: [
-        for (var i = 0; i < f.length; i += 2)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: i + 1 < f.length
-                ? Row(children: [Expanded(child: f[i]), const SizedBox(width: 8), Expanded(child: f[i + 1])])
-                : Center(child: FractionallySizedBox(widthFactor: 0.5, child: f[i])),
-          ),
-      ]);
+  Widget _grid2(List<Widget> f) => Column(
+    children: [
+      for (var i = 0; i < f.length; i += 2)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: i + 1 < f.length
+              ? Row(
+                  children: [
+                    Expanded(child: f[i]),
+                    const SizedBox(width: 8),
+                    Expanded(child: f[i + 1]),
+                  ],
+                )
+              : Center(child: FractionallySizedBox(widthFactor: 0.5, child: f[i])),
+        ),
+    ],
+  );
 
-  Widget _num(String label, double v, void Function(double) set, {double min = 0, double max = 1000}) =>
-      SizedBox(
-        width: 140,
-        child: _NumField(label: label, value: v, min: min, max: max, onChanged: (x) => _change(() => set(x))),
-      );
+  Widget _num(String label, double v, void Function(double) set, {double min = 0, double max = 1000}) => SizedBox(
+    width: 140,
+    child: _NumField(label: label, value: v, min: min, max: max, onChanged: (x) => _change(() => set(x))),
+  );
 
   Widget _options(BuildContext context) {
     final many = s.pages.length >= 2;
@@ -347,181 +375,195 @@ class _CardComposerViewState extends State<CardComposerView> {
       controller: _optC,
       thumbVisibility: true,
       scrollbarOrientation: ScrollbarOrientation.right,
-      child: ListView(controller: _optC, padding: const EdgeInsets.fromLTRB(16, 16, 22, 16), children: [
-      _title('نوع خروجی (انتخاب با شما)'),
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        _chip('ذخیره جداگانه', t == OutputTarget.separate, () => _change(() {
-              spec.target = OutputTarget.separate;
-              spec.applyDefaultMargins(a4: widget.services.settings.defaultMargin);
-            })),
-        _chip('ترکیب در یک تصویر', t == OutputTarget.combined, () => _change(() {
-              spec.target = OutputTarget.combined;
-              spec.applyDefaultMargins(a4: widget.services.settings.defaultMargin);
-            })),
-        _chip('قرارگیری روی صفحه A4', t == OutputTarget.a4, () => _change(() {
-              spec.target = OutputTarget.a4;
-              spec.applyDefaultMargins(a4: widget.services.settings.defaultMargin);
-            })),
-      ]),
-      if (t == OutputTarget.combined || t == OutputTarget.a4) ...[
-        _title('چیدمان (تعداد سطر و ستون)'),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _chip('بالا و پایین', spec.cols == 1, () => _change(() {
-                spec.cols = 1;
-                spec.rows = 2;
-              })),
-          _chip('کنار هم', spec.rows == 1 && spec.cols >= 2, () => _change(() {
-                spec.rows = 1;
-                spec.cols = 2;
-              })),
-        ]),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          if (t == OutputTarget.a4)
-            _num('تعداد سطر', spec.rows.toDouble(), (x) => spec.rows = x.round().clamp(1, 12).toInt(), min: 1, max: 12),
-          _num('تعداد ستون', spec.cols.toDouble(), (x) => spec.cols = x.round().clamp(1, 12).toInt(), min: 1, max: 12),
-        ]),
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            t == OutputTarget.a4
-                ? toPersianDigits('ظرفیت هر صفحه: ${spec.rows * spec.cols} مورد؛ بقیه به صفحه بعد می‌روند.')
-                : 'در حالت ترکیب، تعداد سطر خودکار از روی تعداد صفحات و ستون‌ها تعیین می‌شود.',
-            style: Theme.of(context).textTheme.bodySmall,
+      child: ListView(
+        controller: _optC,
+        padding: const EdgeInsets.fromLTRB(16, 16, 22, 16),
+        children: [
+          _title('نوع خروجی (انتخاب با شما)'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _chip(
+                'ذخیره جداگانه',
+                t == OutputTarget.separate,
+                () => _change(() {
+                  spec.target = OutputTarget.separate;
+                  spec.applyDefaultMargins(a4: widget.services.settings.defaultMargin);
+                }),
+              ),
+              _chip(
+                'ترکیب در یک تصویر',
+                t == OutputTarget.combined,
+                () => _change(() {
+                  spec.target = OutputTarget.combined;
+                  spec.applyDefaultMargins(a4: widget.services.settings.defaultMargin);
+                }),
+              ),
+              _chip(
+                'قرارگیری روی صفحه A4',
+                t == OutputTarget.a4,
+                () => _change(() {
+                  spec.target = OutputTarget.a4;
+                  spec.applyDefaultMargins(a4: widget.services.settings.defaultMargin);
+                }),
+              ),
+            ],
           ),
-        ),
-      ],
-      if (t == OutputTarget.a4) ...[
-        _title('جهت صفحه A4'),
-        Wrap(spacing: 8, children: [
-          _chip('عمودی', !spec.a4Landscape, () => _change(() => spec.a4Landscape = false)),
-          _chip('افقی', spec.a4Landscape, () => _change(() => spec.a4Landscape = true)),
-        ]),
-      ],
-      if (t == OutputTarget.a4) ...[
-        _title('موقعیت روی صفحه A4'),
-        Directionality(
-          textDirection: TextDirection.ltr, // چپ و راست به‌معنی چپ و راست واقعی صفحه
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: SizedBox(
-              width: 150,
-              height: 190,
-              child: GridView.count(
-                crossAxisCount: 3,
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 6,
-                childAspectRatio: 0.78,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  for (var i = 0; i < 9; i++)
-                    Tooltip(
-                      message: const ['بالا چپ', 'بالا وسط', 'بالا راست', 'وسط چپ', 'وسط', 'وسط راست', 'پایین چپ', 'پایین وسط', 'پایین راست'][i],
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => _change(() => spec.anchor = i),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            color: spec.anchor == i ? Theme.of(context).colorScheme.primary : null,
-                            border: Border.all(color: Theme.of(context).colorScheme.outline),
-                          ),
-                          child: Icon(Icons.credit_card, size: 18, color: spec.anchor == i ? Colors.white : Theme.of(context).colorScheme.outline),
-                        ),
-                      ),
-                    ),
-                ],
+          if (t == OutputTarget.combined || t == OutputTarget.a4) ...[
+            _title('چیدمان (تعداد سطر و ستون)'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _chip(
+                  'بالا و پایین',
+                  spec.cols == 1,
+                  () => _change(() {
+                    spec.cols = 1;
+                    spec.rows = 2;
+                  }),
+                ),
+                _chip(
+                  'کنار هم',
+                  spec.rows == 1 && spec.cols >= 2,
+                  () => _change(() {
+                    spec.rows = 1;
+                    spec.cols = 2;
+                  }),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (t == OutputTarget.a4) _num('تعداد سطر', spec.rows.toDouble(), (x) => spec.rows = x.round().clamp(1, 12).toInt(), min: 1, max: 12),
+                _num('تعداد ستون', spec.cols.toDouble(), (x) => spec.cols = x.round().clamp(1, 12).toInt(), min: 1, max: 12),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                t == OutputTarget.a4
+                    ? toPersianDigits('ظرفیت هر صفحه: ${spec.rows * spec.cols} مورد؛ بقیه به صفحه بعد می‌روند.')
+                    : 'در حالت ترکیب، تعداد سطر خودکار از روی تعداد صفحات و ستون‌ها تعیین می‌شود.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
+          ],
+          if (t == OutputTarget.a4) ...[
+            _title('جهت صفحه A4'),
+            Wrap(
+              spacing: 8,
+              children: [
+                _chip('عمودی', !spec.a4Landscape, () => _change(() => spec.a4Landscape = false)),
+                _chip('افقی', spec.a4Landscape, () => _change(() => spec.a4Landscape = true)),
+              ],
+            ),
+          ],
+          if (t == OutputTarget.a4) ...[
+            _title('موقعیت روی صفحه A4'),
+            Directionality(
+              textDirection: TextDirection.ltr, // چپ و راست به‌معنی چپ و راست واقعی صفحه
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: SizedBox(
+                  width: 150,
+                  height: 190,
+                  child: GridView.count(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 6,
+                    crossAxisSpacing: 6,
+                    childAspectRatio: 0.78,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      for (var i = 0; i < 9; i++)
+                        Tooltip(
+                          message: const ['بالا چپ', 'بالا وسط', 'بالا راست', 'وسط چپ', 'وسط', 'وسط راست', 'پایین چپ', 'پایین وسط', 'پایین راست'][i],
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => _change(() => spec.anchor = i),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                color: spec.anchor == i ? Theme.of(context).colorScheme.primary : null,
+                                border: Border.all(color: Theme.of(context).colorScheme.outline),
+                              ),
+                              child: Icon(Icons.credit_card, size: 18, color: spec.anchor == i ? Colors.white : Theme.of(context).colorScheme.outline),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (two) LtrSwitchTile(title: const Text('جابه‌جایی ترتیب روی و پشت'), value: spec.swapOrder, onChanged: (v) => _change(() => spec.swapOrder = v)),
+          _title('حاشیه‌ها و فاصله (میلی‌متر)'),
+          _grid2([
+            _numF('حاشیه بالا', spec.mTop, (x) => spec.mTop = x),
+            _numF('حاشیه پایین', spec.mBottom, (x) => spec.mBottom = x),
+            _numF('حاشیه راست', spec.mRight, (x) => spec.mRight = x),
+            _numF('حاشیه چپ', spec.mLeft, (x) => spec.mLeft = x),
+            if (many && t != OutputTarget.separate) _numF('فاصله دو مدرک', spec.gap, (x) => spec.gap = x),
+          ]),
+          _title('برش مدرک'),
+          Wrap(
+            spacing: 8,
+            children: [_chip('دستی', !spec.autoCrop, () => _change(() => spec.autoCrop = false)), _chip('خودکار', spec.autoCrop, () => _change(() => spec.autoCrop = true))],
           ),
-        ),
-      ],
-      if (two)
-        LtrSwitchTile(title: const Text('جابه‌جایی ترتیب روی و پشت'),
-          value: spec.swapOrder,
-          onChanged: (v) => _change(() => spec.swapOrder = v),
-        ),
-      _title('اندازه کارت (میلی‌متر)'),
-      _grid2([
-        _numF('عرض', spec.cardW, (x) => spec.cardW = x, min: 1),
-        _numF('ارتفاع', spec.cardH, (x) => spec.cardH = x, min: 1),
-      ]),
-      LtrSwitchTile(title: const Text('حفظ نسبت ابعاد تصویر'),
-        value: spec.keepAspect,
-        onChanged: (v) => _change(() => spec.keepAspect = v),
-      ),
-      _title('حاشیه‌ها و فاصله (میلی‌متر)'),
-      _grid2([
-        _numF('حاشیه بالا', spec.mTop, (x) => spec.mTop = x),
-        _numF('حاشیه پایین', spec.mBottom, (x) => spec.mBottom = x),
-        _numF('حاشیه راست', spec.mRight, (x) => spec.mRight = x),
-        _numF('حاشیه چپ', spec.mLeft, (x) => spec.mLeft = x),
-        if (many && t != OutputTarget.separate) _numF('فاصله دو کارت', spec.gap, (x) => spec.gap = x),
-      ]),
-      _title('برش کارت'),
-      Wrap(spacing: 8, children: [
-        _chip('دستی', !spec.autoCrop, () => _change(() => spec.autoCrop = false)),
-        _chip('خودکار', spec.autoCrop, () => _change(() => spec.autoCrop = true)),
-      ]),
-      const SizedBox(height: 8),
-      if (spec.autoCrop) ...[
-        _num('تنظیم لبه برش (mm)', spec.edgeMm, (x) => spec.edgeMm = x, min: -15, max: 15),
-        const SizedBox(height: 4),
-        const Text('اگر برش خودکار زیاد برش می‌دهد، یک عدد مثبت (مثلاً ۲) وارد کنید؛ برای برش کمتر عدد منفی.'),
-        const SizedBox(height: 8),
-      ],
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        for (var i = 0; i < s.pages.length; i++)
+          const SizedBox(height: 8),
+          if (spec.autoCrop) ...[
+            _num('تنظیم لبه برش (mm)', spec.edgeMm, (x) => spec.edgeMm = x, min: -15, max: 15),
+            const SizedBox(height: 4),
+            const Text('اگر برش خودکار زیاد برش می‌دهد، یک عدد مثبت (مثلاً ۲) وارد کنید؛ برای برش کمتر عدد منفی.'),
+            const SizedBox(height: 8),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < s.pages.length; i++)
+                OutlinedButton.icon(onPressed: _busy ? null : () => _cropManual(i), icon: const Icon(Icons.crop), label: Text('برش ${_pageName(i)}')),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              spec.autoCrop
+                  ? 'صفحه‌ای که با دکمه‌های بالا دستی برش بخورد، همان برش دستی را می‌گیرد و برش خودکار روی آن اعمال نمی‌شود.'
+                  : 'صفحه‌ای که برش نخورده باشد کامل استفاده می‌شود.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          _title('کیفیت خروجی (DPI)'),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final d in const [200, 300, 600]) _chip('$d', spec.dpi == d, () => _change(() => spec.dpi = d)),
+            ],
+          ),
+          _title('فرمت فایل'),
+          Wrap(spacing: 8, children: [for (final f in ExportFormat.values) _chip(f.labelFa, spec.format == f, () => _change(() => spec.format = f))]),
+          const SizedBox(height: 16),
           OutlinedButton.icon(
-            onPressed: _busy ? null : () => _cropManual(i),
-            icon: const Icon(Icons.crop),
-            label: Text('برش ${_pageName(i)}'),
+            onPressed: _busy ? null : _chooseFolder,
+            icon: const Icon(Icons.folder_open),
+            label: Text(_outDir == null ? 'انتخاب پوشه ذخیره' : 'پوشه: $_outDir', overflow: TextOverflow.ellipsis),
           ),
-      ]),
-      Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Text(
-          spec.autoCrop
-              ? 'صفحه‌ای که با دکمه‌های بالا دستی برش بخورد، همان برش دستی را می‌گیرد و برش خودکار روی آن اعمال نمی‌شود.'
-              : 'صفحه‌ای که برش نخورده باشد کامل استفاده می‌شود.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+          const SizedBox(height: 8),
+          FilledButton.icon(onPressed: (_busy || t == null || s.pages.isEmpty) ? null : _save, icon: const Icon(Icons.save_alt), label: const Text('ذخیره خروجی')),
+          if (_outDir != null && _msg != null && _msg!.startsWith('ذخیره شد'))
+            TextButton.icon(onPressed: () => Process.run('explorer.exe', [_outDir!]), icon: const Icon(Icons.open_in_new), label: const Text('باز کردن پوشه')),
+          const SizedBox(height: 8),
+          TextButton.icon(onPressed: () => _change(spec.resetLayout), icon: const Icon(Icons.restart_alt), label: const Text('بازگشت به حالت اولیه چیدمان')),
+          if (_msg != null && _previews.isEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg!)),
+          if (_msg != null && _previews.isNotEmpty && _msg!.startsWith('ذخیره')) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg!)),
+        ],
       ),
-      _title('کیفیت خروجی (DPI)'),
-      Wrap(spacing: 8, children: [
-        for (final d in const [200, 300, 600]) _chip('$d', spec.dpi == d, () => _change(() => spec.dpi = d)),
-      ]),
-      _title('فرمت فایل'),
-      Wrap(spacing: 8, children: [
-        for (final f in ExportFormat.values) _chip(f.labelFa, spec.format == f, () => _change(() => spec.format = f)),
-      ]),
-      const SizedBox(height: 16),
-      OutlinedButton.icon(
-        onPressed: _busy ? null : _chooseFolder,
-        icon: const Icon(Icons.folder_open),
-        label: Text(_outDir == null ? 'انتخاب پوشه ذخیره' : 'پوشه: $_outDir', overflow: TextOverflow.ellipsis),
-      ),
-      const SizedBox(height: 8),
-      FilledButton.icon(
-        onPressed: (_busy || t == null || s.pages.isEmpty) ? null : _save,
-        icon: const Icon(Icons.save_alt),
-        label: const Text('ذخیره خروجی'),
-      ),
-      if (_outDir != null && _msg != null && _msg!.startsWith('ذخیره شد'))
-        TextButton.icon(
-          onPressed: () => Process.run('explorer.exe', [_outDir!]),
-          icon: const Icon(Icons.open_in_new),
-          label: const Text('باز کردن پوشه'),
-        ),
-      const SizedBox(height: 8),
-      TextButton.icon(
-        onPressed: () => _change(spec.resetLayout),
-        icon: const Icon(Icons.restart_alt),
-        label: const Text('بازگشت به حالت اولیه چیدمان'),
-      ),
-      if (_msg != null && _previews.isEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg!)),
-      if (_msg != null && _previews.isNotEmpty && _msg!.startsWith('ذخیره')) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg!)),
-    ]),
     );
   }
 }
@@ -581,17 +623,20 @@ class _PreviewViewportState extends State<_PreviewViewport> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
-        const gap = 16.0, pad = 16.0;
-        final ps = widget.previews;
-        final totalW = ps.fold<double>(0, (a, p) => a + p.width);
-        final maxH = ps.map((p) => p.height.toDouble()).reduce(math.max);
-        final availW = math.max(1.0, box.maxWidth - 2 * pad - gap * (ps.length - 1));
-        final availH = math.max(1.0, box.maxHeight - 2 * pad);
-        final scale = math.min(availW / totalW, availH / maxH) * widget.zoom;
-        final content = Padding(
-          padding: const EdgeInsets.all(pad),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      const gap = 16.0, pad = 16.0;
+      final ps = widget.previews;
+      final totalW = ps.fold<double>(0, (a, p) => a + p.width);
+      final maxH = ps.map((p) => p.height.toDouble()).reduce(math.max);
+      final availW = math.max(1.0, box.maxWidth - 2 * pad - gap * (ps.length - 1));
+      final availH = math.max(1.0, box.maxHeight - 2 * pad);
+      final scale = math.min(availW / totalW, availH / maxH) * widget.zoom;
+      final content = Padding(
+        padding: const EdgeInsets.all(pad),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             for (var i = 0; i < ps.length; i++) ...[
               if (i > 0) const SizedBox(width: gap),
               SizedBox(
@@ -603,50 +648,52 @@ class _PreviewViewportState extends State<_PreviewViewport> {
                 ),
               ),
             ],
-          ]),
-        );
-        return MouseRegion(
-          cursor: _drag ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
-          child: Listener(
-            onPointerSignal: (e) {
-              if (e is PointerScrollEvent) _wheel(e);
+          ],
+        ),
+      );
+      return MouseRegion(
+        cursor: _drag ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
+        child: Listener(
+          onPointerSignal: (e) {
+            if (e is PointerScrollEvent) _wheel(e);
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanStart: (_) => setState(() => _drag = true),
+            onPanEnd: (_) => setState(() => _drag = false),
+            onPanCancel: () => setState(() => _drag = false),
+            onPanUpdate: (d) {
+              if (_h.hasClients) _h.jumpTo((_h.offset - d.delta.dx).clamp(0.0, _h.position.maxScrollExtent).toDouble());
+              if (_v.hasClients) _v.jumpTo((_v.offset - d.delta.dy).clamp(0.0, _v.position.maxScrollExtent).toDouble());
             },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanStart: (_) => setState(() => _drag = true),
-              onPanEnd: (_) => setState(() => _drag = false),
-              onPanCancel: () => setState(() => _drag = false),
-              onPanUpdate: (d) {
-                if (_h.hasClients) _h.jumpTo((_h.offset - d.delta.dx).clamp(0.0, _h.position.maxScrollExtent).toDouble());
-                if (_v.hasClients) _v.jumpTo((_v.offset - d.delta.dy).clamp(0.0, _v.position.maxScrollExtent).toDouble());
-              },
+            child: Scrollbar(
+              controller: _v,
+              thumbVisibility: true,
+              scrollbarOrientation: ScrollbarOrientation.right,
               child: Scrollbar(
-                controller: _v,
+                controller: _h,
                 thumbVisibility: true,
-                scrollbarOrientation: ScrollbarOrientation.right,
-                child: Scrollbar(
-                  controller: _h,
-                  thumbVisibility: true,
-                  notificationPredicate: (n) => n.depth == 1,
+                notificationPredicate: (n) => n.depth == 1,
+                child: SingleChildScrollView(
+                  controller: _v,
+                  physics: const NeverScrollableScrollPhysics(),
                   child: SingleChildScrollView(
-                    controller: _v,
+                    controller: _h,
                     physics: const NeverScrollableScrollPhysics(),
-                    child: SingleChildScrollView(
-                      controller: _h,
-                      physics: const NeverScrollableScrollPhysics(),
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minWidth: box.maxWidth, minHeight: box.maxHeight),
-                        child: Center(child: content),
-                      ),
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: box.maxWidth, minHeight: box.maxHeight),
+                      child: Center(child: content),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        );
-      });
+        ),
+      );
+    },
+  );
 }
 
 class _NumField extends StatefulWidget {
@@ -666,8 +713,7 @@ class _NumFieldState extends State<_NumField> {
     return v.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
   }
 
-  static double? _parse(String t) =>
-      double.tryParse(toLatinDigits(t).replaceAll('٫', '.').replaceAll(',', '.').trim());
+  static double? _parse(String t) => double.tryParse(toLatinDigits(t).replaceAll('٫', '.').replaceAll(',', '.').trim());
 
   @override
   void didUpdateWidget(covariant _NumField old) {
@@ -684,14 +730,14 @@ class _NumFieldState extends State<_NumField> {
 
   @override
   Widget build(BuildContext context) => TextField(
-        controller: _c,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-        textDirection: TextDirection.ltr,
-        textAlign: TextAlign.left,
-        decoration: InputDecoration(labelText: widget.label, isDense: true, border: const OutlineInputBorder()),
-        onChanged: (t) {
-          final v = _parse(t);
-          if (v != null && v >= widget.min && v <= widget.max) widget.onChanged(v);
-        },
-      );
+    controller: _c,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+    textDirection: TextDirection.ltr,
+    textAlign: TextAlign.left,
+    decoration: InputDecoration(labelText: widget.label, isDense: true, border: const OutlineInputBorder()),
+    onChanged: (t) {
+      final v = _parse(t);
+      if (v != null && v >= widget.min && v <= widget.max) widget.onChanged(v);
+    },
+  );
 }

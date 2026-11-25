@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-
 import '../application/hardware_controller.dart';
 import '../application/page_edits.dart';
 import '../application/services.dart';
@@ -43,6 +41,8 @@ class _ScanPageState extends State<ScanPage> {
     ScanMode.multiPage => s.pages.isEmpty ? 'شروع اسکن' : 'اسکن صفحه بعد',
     ScanMode.standard => 'اسکن',
   };
+
+  static String _mm(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -235,7 +235,8 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _applyEffective() {
-    if (!_sources.contains(s.source)) s.source = _sources.first;
+    // مدارک هویتی همیشه ADF است و به فهرست منابع دستگاه برگردانده نمی‌شود
+    if (s.profile.mode != ScanMode.idCard && !_sources.contains(s.source)) s.source = _sources.first;
     if (!_colors.contains(s.color)) s.color = _colors.first;
     if (!_dpis.contains(s.dpi)) {
       s.dpi = _dpis.reduce((a, b) => (a - s.dpi).abs() <= (b - s.dpi).abs() ? a : b);
@@ -262,6 +263,7 @@ class _ScanPageState extends State<ScanPage> {
     final scanning = s.phase == SessionPhase.scanning;
     final isWia = dev?.driver == 'WIA';
     final canStart = dev != null && isWia && !scanning && !s.atLimit;
+    final isCard = s.profile.mode == ScanMode.idCard;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -271,9 +273,15 @@ class _ScanPageState extends State<ScanPage> {
         if (dev != null && !isWia)
           const Padding(padding: EdgeInsets.only(top: 8), child: Text('اسکن با درایور TWAIN هنوز فعال نشده است. اگر دستگاه نسخه WIA هم دارد، آن را انتخاب کنید.')),
         const SizedBox(height: 12),
-        if (s.profile.mode == ScanMode.idCard) _dd<IdDocType>('نوع مدرک', s.idDoc, IdDocType.values, (d) => d.labelFa, (v) => s.update(() => s.idDoc = v)),
-        _dd<ScanSource>('منبع اسکن', s.source, _sources, sourceFa, (v) => s.update(() => s.source = v)),
-        if (s.profile.mode != ScanMode.idCard) ...[
+        if (isCard) ...[
+          _dd<IdDocType>('نوع مدرک', s.idDoc, IdDocType.values, (d) => d.labelFa, (v) => s.update(() => s.idDoc = v)),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(toPersianDigits('ناحیه اسکن: ${_mm(s.idScanMm.w)} × ${_mm(s.idScanMm.h)} میلی‌متر (قابل تغییر در تنظیمات)'), style: Theme.of(context).textTheme.bodySmall),
+          ),
+        ] else
+          _dd<ScanSource>('منبع اسکن', s.source, _sources, sourceFa, (v) => s.update(() => s.source = v)),
+        if (!isCard) ...[
           _dd<ScanArea>('اندازه اسکن', s.area, ScanArea.values, (a) => a.labelFa, (v) => s.update(() => s.area = v)),
           if (s.area == ScanArea.custom)
             Padding(
@@ -318,7 +326,7 @@ class _ScanPageState extends State<ScanPage> {
             OutlinedButton.icon(onPressed: s.clear, icon: const Icon(Icons.delete_outline), label: const Text('پاک کردن همه')),
             const SizedBox(height: 8),
             OutlinedButton.icon(onPressed: () => _edit(_selected), icon: const Icon(Icons.crop), label: const Text('برش و ویرایش صفحه')),
-            if (s.profile.mode != ScanMode.idCard) ...[
+            if (!isCard) ...[
               const SizedBox(height: 8),
               FilledButton.tonalIcon(
                 onPressed: () => showExportDialog(context, s, widget.services, s.profile.mode == ScanMode.multiPage ? 'Document' : 'Scan'),

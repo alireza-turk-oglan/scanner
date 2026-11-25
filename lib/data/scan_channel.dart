@@ -1,7 +1,5 @@
 import 'dart:async';
-
 import 'package:flutter/services.dart';
-
 import '../domain/scanner_backend.dart';
 import 'hardware_channel.dart';
 

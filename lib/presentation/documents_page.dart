@@ -1,7 +1,5 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
-
 import '../application/library.dart';
 import '../core/jalali.dart';
 import 'widgets.dart';

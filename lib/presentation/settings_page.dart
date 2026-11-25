@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-
 import '../application/export_service.dart';
 import '../application/services.dart';
 import '../core/jalali.dart';
 import '../domain/export_format.dart';
+import '../domain/id_doc_type.dart';
 import 'widgets.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -131,20 +131,44 @@ class SettingsPage extends StatelessWidget {
             ),
           ]),
           section('کارت و مدارک', Icons.badge_outlined, [
-            label('اندازه پیش‌فرض کارت (میلی‌متر)'),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                SizedBox(
-                  width: 160,
-                  child: NumField(label: 'عرض', value: st.cardW, min: 1, max: 500, onChanged: (v) => st.update(() => st.cardW = v)),
-                ),
-                SizedBox(
-                  width: 160,
-                  child: NumField(label: 'ارتفاع', value: st.cardH, min: 1, max: 500, onChanged: (v) => st.update(() => st.cardH = v)),
-                ),
-              ],
+            const SizedBox(height: 8),
+            const Text(
+              'اندازه ناحیه‌ای از اسکنر که برای هر مدرک اسکن می‌شود (میلی‌متر، از گوشه بالا‌چپ). '
+              'کمی بزرگ‌تر از اندازه واقعی مدرک بگذارید تا برش خودکار بتواند لبه‌ها را تشخیص دهد.',
+            ),
+            for (final t in IdDocType.values) ...[
+              label('اندازه اسکن ${t.labelFa}'),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  SizedBox(
+                    width: 160,
+                    child: NumField(
+                      label: 'عرض',
+                      value: st.idScanMm(t).w,
+                      min: 10,
+                      max: 500,
+                      onChanged: (v) => st.setIdScanMm(t, w: v),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 160,
+                    child: NumField(
+                      label: 'ارتفاع',
+                      value: st.idScanMm(t).h,
+                      min: 10,
+                      max: 500,
+                      onChanged: (v) => st.setIdScanMm(t, h: v),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(onPressed: st.resetIdScanSizes, icon: const Icon(Icons.restart_alt), label: const Text('بازگشت اندازه‌ها به مقدار پیش‌فرض')),
             ),
           ]),
           section('بازگردانی', Icons.restart_alt, [

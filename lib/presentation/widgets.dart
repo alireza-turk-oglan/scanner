@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../core/jalali.dart';
 
 /// فیلد عددی با پذیرش ارقام فارسی و لاتین.

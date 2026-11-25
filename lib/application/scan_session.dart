@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
-
-import '../core/env.dart';
+import '../domain/id_doc_type.dart';
 import '../domain/scan_profile.dart';
 import 'page_edits.dart';
 import 'settings.dart';
 import '../domain/scanner_backend.dart';
+export '../domain/id_doc_type.dart';
 
 enum SessionPhase { idle, scanning, askNext }
 
@@ -36,44 +35,6 @@ extension ScanAreaX on ScanArea {
   };
 }
 
-/// نوع مدرک در حالت اسکن مدارک هویتی؛ هر نوع ناحیه اسکن مخصوص خودش را دارد.
-enum IdDocType { nationalCard, birthCert, passport }
-
-extension IdDocTypeX on IdDocType {
-  String get labelFa => switch (this) {
-    IdDocType.nationalCard => 'کارت ملی',
-    IdDocType.birthCert => 'شناسنامه',
-    IdDocType.passport => 'پاسپورت',
-  };
-  String get firstPageFa => switch (this) {
-    IdDocType.nationalCard => 'روی کارت',
-    IdDocType.birthCert => 'صفحه اول',
-    IdDocType.passport => 'صفحه اطلاعات',
-  };
-  String get secondPageFa => switch (this) {
-    IdDocType.nationalCard => 'پشت کارت',
-    IdDocType.birthCert => 'صفحه دوم',
-    IdDocType.passport => 'صفحه دیگر',
-  };
-  String get scanFirstFa => switch (this) {
-    IdDocType.nationalCard => 'اسکن روی کارت',
-    IdDocType.birthCert => 'اسکن صفحه اول شناسنامه',
-    IdDocType.passport => 'اسکن صفحه اطلاعات پاسپورت',
-  };
-  String get scanSecondFa => switch (this) {
-    IdDocType.nationalCard => 'اسکن پشت کارت',
-    IdDocType.birthCert => 'اسکن صفحه دوم شناسنامه',
-    IdDocType.passport => 'اسکن صفحه دیگر پاسپورت',
-  };
-
-  /// ناحیه اسکن از گوشه بالا‌چپ شیشه (میلی‌متر).
-  ({double w, double h}) get scanMm => switch (this) {
-    IdDocType.nationalCard => (w: Env.cardScanWidthMm, h: Env.cardScanHeightMm),
-    IdDocType.birthCert => (w: Env.birthScanWidthMm, h: Env.birthScanHeightMm),
-    IdDocType.passport => (w: Env.passportScanWidthMm, h: Env.passportScanHeightMm),
-  };
-}
-
 /// نشست اسکن یک حالت (کارت / چندصفحه‌ای / استاندارد): تنظیمات + صفحات اسکن‌شده.
 class ScanSession extends ChangeNotifier {
   ScanSession(this.profile, this.backend, [this.settings]) : dpi = settings?.lastDpi ?? settings?.defaultDpi ?? profile.defaultDpi {
@@ -84,6 +45,8 @@ class ScanSession extends ChangeNotifier {
       brightness = st.lastBrightness;
       contrast = st.lastContrast;
     }
+    // مدارک هویتی همیشه از ADF اسکن می‌شوند (انتخاب منبع در این حالت وجود ندارد)
+    if (profile.mode == ScanMode.idCard) source = ScanSource.adf;
   }
   final AppSettings? settings;
   final ScanProfile profile;
@@ -111,10 +74,13 @@ class ScanSession extends ChangeNotifier {
 
   Directory? _dir;
 
-  /// ناحیه اسکن به میلی‌متر؛ null = کل سطح. مدارک هویتی: ناحیه مخصوص هر نوع مدرک از گوشه بالا‌چپ (idDoc.scanMm).
+  /// ناحیه اسکن مدرک انتخاب‌شده (از تنظیمات برنامه).
+  ({double w, double h}) get idScanMm => settings?.idScanMm(idDoc) ?? idDoc.defaultScanMm;
+
+  /// ناحیه اسکن به میلی‌متر؛ null = کل سطح. مدارک هویتی: ناحیه مخصوص هر نوع مدرک از گوشه بالا‌چپ (قابل تنظیم در تنظیمات).
   ({double x, double y, double w, double h})? _areaMm() {
     if (profile.mode == ScanMode.idCard) {
-      final b = idDoc.scanMm;
+      final b = idScanMm;
       return (x: 0.0, y: 0.0, w: b.w, h: b.h);
     }
     if (area == ScanArea.full) return null;
@@ -138,7 +104,12 @@ class ScanSession extends ChangeNotifier {
     phase = SessionPhase.scanning;
     notifyListeners();
 
-    settings?.saveLastScan(dpi: dpi, color: color.name, source: source.name, brightness: brightness, contrast: contrast);
+    final st = settings;
+    if (st != null) {
+      // منبع اجباری ADF در حالت مدارک نباید منبع ذخیره‌شده اسکن معمولی را عوض کند
+      final savedSource = profile.mode == ScanMode.idCard ? st.lastSource : source.name;
+      st.saveLastScan(dpi: dpi, color: color.name, source: savedSource, brightness: brightness, contrast: contrast);
+    }
     final batch = <String>[];
     final scanDpi = dpi;
     int? lastBits;
