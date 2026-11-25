@@ -32,7 +32,9 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/test/
 README1.md
+
 # Symbolication related
 app.*.symbols
 
