@@ -36,6 +36,44 @@ extension ScanAreaX on ScanArea {
   };
 }
 
+/// نوع مدرک در حالت اسکن مدارک هویتی؛ هر نوع ناحیه اسکن مخصوص خودش را دارد.
+enum IdDocType { nationalCard, birthCert, passport }
+
+extension IdDocTypeX on IdDocType {
+  String get labelFa => switch (this) {
+    IdDocType.nationalCard => 'کارت ملی',
+    IdDocType.birthCert => 'شناسنامه',
+    IdDocType.passport => 'پاسپورت',
+  };
+  String get firstPageFa => switch (this) {
+    IdDocType.nationalCard => 'روی کارت',
+    IdDocType.birthCert => 'صفحه اول',
+    IdDocType.passport => 'صفحه اطلاعات',
+  };
+  String get secondPageFa => switch (this) {
+    IdDocType.nationalCard => 'پشت کارت',
+    IdDocType.birthCert => 'صفحه دوم',
+    IdDocType.passport => 'صفحه دیگر',
+  };
+  String get scanFirstFa => switch (this) {
+    IdDocType.nationalCard => 'اسکن روی کارت',
+    IdDocType.birthCert => 'اسکن صفحه اول شناسنامه',
+    IdDocType.passport => 'اسکن صفحه اطلاعات پاسپورت',
+  };
+  String get scanSecondFa => switch (this) {
+    IdDocType.nationalCard => 'اسکن پشت کارت',
+    IdDocType.birthCert => 'اسکن صفحه دوم شناسنامه',
+    IdDocType.passport => 'اسکن صفحه دیگر پاسپورت',
+  };
+
+  /// ناحیه اسکن از گوشه بالا‌چپ شیشه (میلی‌متر).
+  ({double w, double h}) get scanMm => switch (this) {
+    IdDocType.nationalCard => (w: Env.cardScanWidthMm, h: Env.cardScanHeightMm),
+    IdDocType.birthCert => (w: Env.birthScanWidthMm, h: Env.birthScanHeightMm),
+    IdDocType.passport => (w: Env.passportScanWidthMm, h: Env.passportScanHeightMm),
+  };
+}
+
 /// نشست اسکن یک حالت (کارت / چندصفحه‌ای / استاندارد): تنظیمات + صفحات اسکن‌شده.
 class ScanSession extends ChangeNotifier {
   ScanSession(this.profile, this.backend, [this.settings]) : dpi = settings?.lastDpi ?? settings?.defaultDpi ?? profile.defaultDpi {
@@ -68,14 +106,16 @@ class ScanSession extends ChangeNotifier {
   ColorMode color = ColorMode.color;
   int brightness = 0, contrast = 0;
   ScanArea area = ScanArea.full;
+  IdDocType idDoc = IdDocType.nationalCard; // فقط در حالت مدارک هویتی
   double customW = 210, customH = 297;
 
   Directory? _dir;
 
-  /// ناحیه اسکن به میلی‌متر؛ null = کل سطح. کارت: ناحیه کوچک از گوشه بالا‌چپ (CARD_SCAN_W_MM / CARD_SCAN_H_MM).
+  /// ناحیه اسکن به میلی‌متر؛ null = کل سطح. مدارک هویتی: ناحیه مخصوص هر نوع مدرک از گوشه بالا‌چپ (idDoc.scanMm).
   ({double x, double y, double w, double h})? _areaMm() {
     if (profile.mode == ScanMode.idCard) {
-      return (x: 0.0, y: 0.0, w: Env.cardScanWidthMm, h: Env.cardScanHeightMm);
+      final b = idDoc.scanMm;
+      return (x: 0.0, y: 0.0, w: b.w, h: b.h);
     }
     if (area == ScanArea.full) return null;
     final b = area == ScanArea.custom ? (w: customW, h: customH) : area.mm!;

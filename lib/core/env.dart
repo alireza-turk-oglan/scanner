@@ -18,6 +18,10 @@ class Env {
   static const _detect = String.fromEnvironment('DETECT_THRESHOLD', defaultValue: '14');
   static const _scanW = String.fromEnvironment('CARD_SCAN_W_MM', defaultValue: '100');
   static const _scanH = String.fromEnvironment('CARD_SCAN_H_MM', defaultValue: '70');
+  static const _birthW = String.fromEnvironment('BIRTH_SCAN_W_MM', defaultValue: '110');
+  static const _birthH = String.fromEnvironment('BIRTH_SCAN_H_MM', defaultValue: '155');
+  static const _passW = String.fromEnvironment('PASSPORT_SCAN_W_MM', defaultValue: '130');
+  static const _passH = String.fromEnvironment('PASSPORT_SCAN_H_MM', defaultValue: '92');
   static const _prevPx = String.fromEnvironment('PREVIEW_LONG_SIDE_PX', defaultValue: '1800');
   static const _prevMin = String.fromEnvironment('PREVIEW_MIN_PX_PER_MM', defaultValue: '3');
   static const _prevMax = String.fromEnvironment('PREVIEW_MAX_PX_PER_MM', defaultValue: '14');
@@ -54,6 +58,12 @@ class Env {
   /// ناحیه‌ای از شیشه اسکنر (از گوشه بالا‌چپ) که در حالت کارت اسکن می‌شود.
   static final double cardScanWidthMm = _d(_scanW, 100);
   static final double cardScanHeightMm = _d(_scanH, 70);
+
+  /// ناحیه اسکن شناسنامه (یک صفحه) و پاسپورت (صفحه اطلاعات).
+  static final double birthScanWidthMm = _d(_birthW, 110);
+  static final double birthScanHeightMm = _d(_birthH, 155);
+  static final double passportScanWidthMm = _d(_passW, 130);
+  static final double passportScanHeightMm = _d(_passH, 92);
 
   // پیش‌نمایش
   static final double previewLongSidePx = _d(_prevPx, 1800);
