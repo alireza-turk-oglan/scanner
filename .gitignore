@@ -45,15 +45,10 @@ app.*.map.json
 /android/app/release
 
 # Graphify cache and internal files
-graphify-out/cache/
-graphify-out/*/
-graphify-out/.graphify_analysis.json
-graphify-out/.graphify_build.json
-graphify-out/.graphify_partition_cache.json
-graphify-out/.graphify_semantic_marker
-graphify-out/.graphify_labels.json
-graphify-out/.graphify_labels.json.sig
-graphify-out/.cloud-cta-shown
-graphify-out/cost.json
-graphify-out/manifest.json
-.graphifyignore
+# Graphify: keep only the 3 useful outputs
+graphify-out/*
+
+# Keep useful project graph files
+!graphify-out/GRAPH_REPORT.md
+!graphify-out/graph.html
+!graphify-out/graph.json
