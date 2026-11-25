@@ -522,13 +522,20 @@ class _CardComposerViewState extends State<CardComposerView> {
             const Text('اگر برش خودکار زیاد برش می‌دهد، یک عدد مثبت (مثلاً ۲) وارد کنید؛ برای برش کمتر عدد منفی.'),
             const SizedBox(height: 8),
           ],
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (var i = 0; i < s.pages.length; i++)
-                OutlinedButton.icon(onPressed: _busy ? null : () => _cropManual(i), icon: const Icon(Icons.crop), label: Text('برش ${_pageName(i)}')),
-            ],
+          // یک دکمه برای همه صفحات (با هر تعداد صفحه فضای ثابتی می‌گیرد)
+          PopupMenuButton<int>(
+            enabled: !_busy && s.pages.isNotEmpty,
+            tooltip: 'انتخاب صفحه برای برش دستی',
+            onSelected: _cropManual,
+            itemBuilder: (_) => [for (var i = 0; i < s.pages.length; i++) PopupMenuItem(value: i, child: Text(_pageName(i)))],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border.all(color: Theme.of(context).colorScheme.outline),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.crop, size: 18), SizedBox(width: 8), Text('برش دستی صفحه…'), Icon(Icons.arrow_drop_down)]),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.only(top: 6),
